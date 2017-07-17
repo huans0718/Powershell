@@ -1,0 +1,61 @@
+#Update the recycle mins
+cls
+$here =Split-Path -Parent $MyInvocation.MyCommand.Path
+$pool=Get-Content $here\pool.txt
+#$Server=Get-Content $here\server.txt
+$logfolder = "$here\LogFiles"
+$logfile = Join-Path $logfolder "set-pool_schedule_$(Get-Date -f yyyyMMdd_hhmmss).log"
+
+$S= New-PSSession -ComputerName whdcepiweb21.aprdmz.com
+
+function change-schedule ($PL){
+    Invoke-Command -Session $S -scriptblock {Import-Module WebAdministration}
+    $output=Invoke-Command -session $S -ArgumentList $PL -scriptblock {Set-ItemProperty -Path IIS:\AppPools\$args -Name Recycling.periodicRestart.schedule -Value @{value="02:00"}}
+    $output
+}
+
+foreach ($P in $pool)
+{
+        change-schedule $P
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------
+#Update recycle schedule
+cls
+#Logfile
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+New-Item $logfolder -ItemType Directory -Force | Out-Null
+$logfolder = "$here\LogFiles"
+$logfile = Join-Path $logfolder "set-pool_$(Get-Date -f yyyyMMdd_hhmmss).log"
+
+#Para
+$pool=Get-Content $here\pool.txt
+$Server=Get-Content $here\server.txt
+
+function set-pool ($PL,$C)
+{  
+    
+    $output = Invoke-Command -computername $C -ArgumentList $PL -ScriptBlock {c:\windows\system32\inetsrv\appcmd.exe set apppool /apppool.name:$args /recycling.periodicRestart.time:00:00:00}
+
+    if($output.Contains("ERROR"))
+    {
+        Write-host "This computer$C which pool$PL is failed" -ForegroundColor Red
+    }
+    else
+    {
+        Write-host "This computer$C which pool$PL is successfully" -ForegroundColor Green
+    }
+
+
+    Out-File $logfile -Append
+}
+
+
+foreach ($P in $pool)
+{
+    foreach ($S in $Server)
+    {
+        $full_server = "$S.aprdmz.com"
+        set-pool $P $full_server
+    }
+}
